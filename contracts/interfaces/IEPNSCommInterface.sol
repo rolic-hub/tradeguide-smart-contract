@@ -8,4 +8,8 @@ interface IEPNSCommInterface {
         address _recipient,
         bytes memory _identity
     ) external;
+
+    function addDelegate(address _delegate) external;
+
+    function subscribe(address _channel) external returns (bool);
 }

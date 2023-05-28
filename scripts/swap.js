@@ -17,7 +17,7 @@ async function main() {
   const weth = networkConfig[chain]["weth"];
   const wethValue = ethers.parseEther("0.5");
 
-  const contractAddress = await deployments.get("TradeGuide");
+  const contractAddress = await deployments.get("SwapTest");
 
   const tradeGuideContract = await ethers.getContractAt(
     "TradeGuide",
@@ -34,10 +34,8 @@ async function main() {
     wethValue
   );
 
-  const swapFunction = await tradeGuideContract.swapExactInputSingleAlone(
-    weth,
-    wethValue,
-    dai
+  const swapFunction = await tradeGuideContract.swapExactInputSingle(
+    wethValue
   );
   const res = await swapFunction.wait();
   console.log(res);

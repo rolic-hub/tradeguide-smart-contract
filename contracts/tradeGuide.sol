@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.4;
+pragma abicoder v2;
+
 
 import "./tradeGuideStorage.sol";
 import "./interfaces/IPriceOracle.sol";
+import "./interfaces/IEPNSCommInterface.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import {AutomationRegistryInterface, State, Config} from "@chainlink/contracts/src/v0.8/interfaces/AutomationRegistryInterface1_2.sol";
 import {LinkTokenInterface} from "@chainlink/contracts/src/v0.8/interfaces/LinkTokenInterface.sol";
@@ -29,6 +32,7 @@ contract TradeGuide is TradeGuideStorage {
     LinkTokenInterface public immutable i_link;
     IPriceOracle public immutable oracleAdress;
     address public immutable registrar;
+    IEPNSCommInterface public immutable _epnsComms;
     AutomationRegistryInterface public immutable i_registry;
     bytes4 registerSig = KeeperRegistrarInterface.register.selector;
 
@@ -37,13 +41,15 @@ contract TradeGuide is TradeGuideStorage {
         LinkTokenInterface _link,
         address _registrar,
         IPriceOracle _oracleAddress,
-        AutomationRegistryInterface _registry
+        AutomationRegistryInterface _registry,
+        IEPNSCommInterface epnsComms
     ) {
         swapRouter = _swapRouter;
         i_link = _link;
         registrar = _registrar;
         oracleAdress = _oracleAddress;
         i_registry = _registry;
+        _epnsComms = epnsComms;
     }
 
     function useTPandSL(
@@ -60,11 +66,17 @@ contract TradeGuide is TradeGuideStorage {
 
         TradeLog memory _tradeLog = trades.push();
         _tradeLog.trader = msg.sender;
+        _tradeLog.tokenBought = _tokenOut;
         _tradeLog.timeStamp = block.timestamp;
         _tradeLog.buyPrice = currentPrice;
         _tradeLog._tradeState = TradeState.ONGOING;
         _tradeLog.sl = sl;
         _tradeLog.tp = tp;
+
+        address[] memory _subscribers = subscribers[msg.sender];
+        for (uint i = 0; i < _subscribers.length; i++) {
+            sendNotif(_subscribers[i], _tradeLog, channel);
+        }
 
         uint256 amountOut = swapExactInputSingle(
             _tokenIn,
@@ -193,6 +205,7 @@ contract TradeGuide is TradeGuideStorage {
         );
         IERC20(USDC).transfer(_to, subscribersFee[_to]);
         subscribers[_to].push(msg.sender);
+        _epnsComms.subscribe(channel);
     }
 
     function swapExactInputSingle(
@@ -233,6 +246,8 @@ contract TradeGuide is TradeGuideStorage {
         balances[msg.sender][_tokenOut] = amountOut;
         noOfTrades[msg.sender] += 1;
         totalOfTrades++;
+
+        IERC20(_tokenOut).safeApprove(address(swapRouter), amountOut);
     }
 
     function swapExactInputSingleAlone(
@@ -257,6 +272,7 @@ contract TradeGuide is TradeGuideStorage {
 
         TradeLog storage _tradeLog = trades.push();
         _tradeLog.trader = msg.sender;
+        _tradeLog.tokenBought = _tokenOut;
         _tradeLog.timeStamp = block.timestamp;
         _tradeLog.buyPrice = int256(currentPriceOut);
         _tradeLog._tradeState = TradeState.ONGOING;
@@ -291,6 +307,43 @@ contract TradeGuide is TradeGuideStorage {
     function addFundsByID(address user, uint96 amount) external {
         uint256 id = addressToUpkeepId[user];
         i_registry.addFunds(id, amount);
+    }
+
+    function sendNotif(
+        address _to,
+        TradeLog memory _tradeLog,
+        address _channel
+    ) public returns (bool) {
+        _epnsComms.sendNotification(
+            _channel,
+            _to,
+            bytes(
+                string(
+                    abi.encodePacked(
+                        "0",
+                        "+",
+                        "3",
+                        "+",
+                        "Swap Alert",
+                        numberToString(_tradeLog.timeStamp),
+                        ":",
+                        addressToString(_tradeLog.trader),
+                        "bought",
+                        addressToString(_tradeLog.tokenBought),
+                        "at",
+                        numberToString(uint(_tradeLog.buyPrice)),
+                        "with",
+                        numberToString(uint(_tradeLog.sl)),
+                        numberToString(uint(_tradeLog.tp))
+                    )
+                )
+            )
+        );
+        return true;
+    }
+
+    function addAdelegate(address _delegate) external {
+        _epnsComms.addDelegate(_delegate);
     }
 
     function setSubscribersFee(uint256 fee, address user) public {
@@ -336,4 +389,6 @@ contract TradeGuide is TradeGuideStorage {
     function getTotalTrades() public view returns (uint256) {
         return totalOfTrades;
     }
+
+    // recieve() external {};
 }
