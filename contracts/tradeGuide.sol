@@ -2,7 +2,6 @@
 pragma solidity ^0.8.4;
 pragma abicoder v2;
 
-
 import "./tradeGuideStorage.sol";
 import "./interfaces/IPriceOracle.sol";
 import "./interfaces/IEPNSCommInterface.sol";
@@ -74,9 +73,8 @@ contract TradeGuide is TradeGuideStorage {
         _tradeLog.tp = tp;
 
         address[] memory _subscribers = subscribers[msg.sender];
-        for (uint i = 0; i < _subscribers.length; i++) {
-            sendNotif(_subscribers[i], _tradeLog, channel);
-        }
+
+        sendNotif(_subscribers, _tradeLog, channel);
 
         uint256 amountOut = swapExactInputSingle(
             _tokenIn,
@@ -205,7 +203,6 @@ contract TradeGuide is TradeGuideStorage {
         );
         IERC20(USDC).transfer(_to, subscribersFee[_to]);
         subscribers[_to].push(msg.sender);
-        _epnsComms.subscribe(channel);
     }
 
     function swapExactInputSingle(
@@ -213,7 +210,7 @@ contract TradeGuide is TradeGuideStorage {
         uint256 amountIn,
         address _tokenOut,
         address reciepient
-    ) public returns (uint256 amountOut) {
+    ) internal returns (uint256 amountOut) {
         // msg.sender must approve this contract
 
         // // transfer tokens
@@ -279,6 +276,10 @@ contract TradeGuide is TradeGuideStorage {
         _tradeLog.sl = sl;
         _tradeLog.tp = tp;
 
+        address[] memory _subscribers = subscribers[msg.sender];
+
+        sendNotif(_subscribers, _tradeLog, channel);
+
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter
             .ExactInputSingleParams({
                 tokenIn: _tokenIn,
@@ -310,35 +311,37 @@ contract TradeGuide is TradeGuideStorage {
     }
 
     function sendNotif(
-        address _to,
+        address[] memory _to,
         TradeLog memory _tradeLog,
         address _channel
     ) public returns (bool) {
-        _epnsComms.sendNotification(
-            _channel,
-            _to,
-            bytes(
-                string(
-                    abi.encodePacked(
-                        "0",
-                        "+",
-                        "3",
-                        "+",
-                        "Swap Alert",
-                        numberToString(_tradeLog.timeStamp),
-                        ":",
-                        addressToString(_tradeLog.trader),
-                        "bought",
-                        addressToString(_tradeLog.tokenBought),
-                        "at",
-                        numberToString(uint(_tradeLog.buyPrice)),
-                        "with",
-                        numberToString(uint(_tradeLog.sl)),
-                        numberToString(uint(_tradeLog.tp))
+        for (uint i = 0; i < _to.length; i++) {
+            _epnsComms.sendNotification(
+                _channel,
+                _to[i],
+                bytes(
+                    string(
+                        abi.encodePacked(
+                            "0",
+                            "+",
+                            "3",
+                            "+",
+                            "Swap Alert",
+                            numberToString(_tradeLog.timeStamp),
+                            ":",
+                            addressToString(_tradeLog.trader),
+                            "bought",
+                            addressToString(_tradeLog.tokenBought),
+                            "at",
+                            numberToString(uint(_tradeLog.buyPrice)),
+                            "with",
+                            numberToString(uint(_tradeLog.sl)),
+                            numberToString(uint(_tradeLog.tp))
+                        )
                     )
                 )
-            )
-        );
+            );
+        }
         return true;
     }
 
