@@ -143,7 +143,6 @@ contract TradeGuide is TradeGuideStorage {
                 )
             );
             _tradeLog.upkeepID = upkeepID;
-            addressToUpkeepId[msg.sender] = upkeepID;
             emit UpkeepID(upkeepID);
         } else {
             revert("auto-approve disabled");
@@ -192,7 +191,7 @@ contract TradeGuide is TradeGuideStorage {
             swapExactInputSingle(_tokenIn, amountIn, USDC, msg.sender);
             _tradeLog._tradeState = TradeState.COMPLETED;
         } else {
-            cancelUpkeepById(_tradeLog.upkeepID);
+            cancelUpkeepById(_tradeLog);
         }
     }
 
@@ -203,6 +202,7 @@ contract TradeGuide is TradeGuideStorage {
         );
         IERC20(USDC).transfer(_to, subscribersFee[_to]);
         subscribers[_to].push(msg.sender);
+        emit Subscribed(_to, subscribersFee[_to]);
     }
 
     function swapExactInputSingle(
@@ -301,12 +301,13 @@ contract TradeGuide is TradeGuideStorage {
         totalOfTrades++;
     }
 
-    function cancelUpkeepById(uint256 id) public {
+    function cancelUpkeepById(TradeLog memory _tradeLog) public {
+        uint256 id = _tradeLog.upkeepID;
         i_registry.cancelUpkeep(id);
     }
 
-    function addFundsByID(address user, uint96 amount) external {
-        uint256 id = addressToUpkeepId[user];
+    function addFundsByID(TradeLog memory _tradeLog, uint96 amount) external {
+        uint256 id = _tradeLog.upkeepID;
         i_registry.addFunds(id, amount);
     }
 
@@ -349,16 +350,16 @@ contract TradeGuide is TradeGuideStorage {
         _epnsComms.addDelegate(_delegate);
     }
 
-    function setSubscribersFee(uint256 fee, address user) public {
-        subscribersFee[user] = fee;
+    function addAPost(string memory link) public {
+        posts[msg.sender].push(link);
     }
 
-    function setUserProfile(
-        address user,
-        string memory _image,
-        string memory _name
-    ) public {
-        userProfile[user] = User(user, _image, _name);
+    function setSubscribersFee(uint256 fee) public {
+        subscribersFee[msg.sender] = fee;
+    }
+
+    function setUserProfile(string memory userLink) public {
+        userProfile[msg.sender] = userLink;
     }
 
     //view Functions
@@ -373,7 +374,7 @@ contract TradeGuide is TradeGuideStorage {
         return subscribers[user];
     }
 
-    function getProfile(address user) public view returns (User memory) {
+    function getProfile(address user) public view returns (string memory) {
         return userProfile[user];
     }
 
@@ -393,5 +394,5 @@ contract TradeGuide is TradeGuideStorage {
         return totalOfTrades;
     }
 
-    // recieve() external {};
+    receive() external payable {}
 }

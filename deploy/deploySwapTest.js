@@ -1,5 +1,6 @@
 const { network } = require("hardhat");
 const { networkConfig } = require("../helperHardhat");
+const { ethers } = require("ethers");
 
 module.exports = async ({ getNamedAccounts, deployments }) => {
   const { deploy, log } = deployments;
@@ -8,18 +9,13 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
   const chain = network.config.chainId;
   let arguments = [
     networkConfig[chain]["swapRouter"],
-    networkConfig[chain]["linkToken"],
-    networkConfig[chain]["registrar"],
-    networkConfig[chain]["aaveOracle"],
-    networkConfig[chain]["registry"],
-    networkConfig[chain]["epns"],
-
+   
   ];
   log(
     "----------------------------------------------------------------------------"
   );
 
-  await deploy("TradeGuide", {
+  await deploy("SwapTest", {
     from: deployer,
     args: arguments,
     log: true,
@@ -27,8 +23,8 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
   });
 
   log(
-    "----------------------------------deployed tradeguide contract ---------------------------"
+    "----------------------------------deployed swapTest contract ---------------------------"
   );
 };
 
-module.exports.tags = ["tradeGuide"];
+module.exports.tags = ["swap"];

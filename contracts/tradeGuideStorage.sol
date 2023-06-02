@@ -19,12 +19,6 @@ contract TradeGuideStorage {
         COMPLETED
     }
 
-    struct User {
-        address user;
-        string image;
-        string name;
-    }
-
     struct TradeLog {
         address trader;
         address tokenBought;
@@ -39,15 +33,16 @@ contract TradeGuideStorage {
     TradeLog[] public trades;
 
     mapping(address => address[]) public subscribers;
+    mapping(address => string[]) public posts;
     mapping(address => uint256) public noOfSubscribers;
     mapping(address => uint256) public noOfTrades;
-    mapping(address => uint) public addressToUpkeepId;
-    mapping(address => User) public userProfile;
+    mapping(address => string) public userProfile;
     mapping(address => uint) subscribersFee;
     mapping(address => mapping(address => uint256)) public balances;
 
     event Swapped(address _tokenIn, uint256 _price);
     event UpkeepID(uint256 indexed upkeedId);
+    event Subscribed(address to, uint amount);
 
     // Helper function to convert address to string
     function addressToString(

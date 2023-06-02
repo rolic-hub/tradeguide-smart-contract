@@ -6,48 +6,49 @@ const {
 const abi = require("../constants/abi.json");
 
 async function main() {
-  await deployments.fixture(["all"]);
-  await network.provider.request({
-    method: "hardhat_impersonateAccount",
-    params: [impersonateAcc],
-  });
+  await deployments.fixture(["swap"]);
   const chain = network.config.chainId;
   const signer = await ethers.getSigner(impersonateAcc);
   const dai = networkConfig[chain]["dai"];
   const weth = networkConfig[chain]["weth"];
-  const wethValue = ethers.parseEther("0.5");
+  const wethValue = ethers.utils.parseEther("0.5");
 
   const contractAddress = await deployments.get("SwapTest");
 
   const tradeGuideContract = await ethers.getContractAt(
-    "TradeGuide",
+    "SwapTest",
     contractAddress.address,
     signer
   );
+  await getBalance(dai, signer, signer.address, "dai");
 
   await approveERC20(
     weth,
     signer,
     signer.address,
     "weth",
-    tradeGuideContract,
+    tradeGuideContract.address,
     wethValue
   );
+  console.log("before swapping tokens ");
 
-  const swapFunction = await tradeGuideContract.swapExactInputSingle(
-    wethValue
-  );
+  const swapFunction = await tradeGuideContract.swapExactInputSingle(wethValue);
   const res = await swapFunction.wait();
-  console.log(res);
+  console.log("swapped ");
 
   await getBalance(weth, signer, signer.address, "weth");
+  await getBalance(dai, signer, signer.address, "dai");
 }
 async function approveERC20(address, signer, user, name, spender, value) {
+  await network.provider.request({
+    method: "hardhat_impersonateAccount",
+    params: [impersonateAcc],
+  });
   const token = new ethers.Contract(address, abi, signer);
   await getBalance(address, signer, user, name);
   const approve = await token.approve(spender, value);
   const res = await approve.wait();
-  console.log(res);
+  console.log("approved");
 }
 
 async function getBalance(address, signer, user, name) {

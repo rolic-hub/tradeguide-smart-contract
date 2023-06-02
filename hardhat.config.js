@@ -9,7 +9,7 @@ require("dotenv").config()
 const POLYGON_MAINNET_API = process.env.POLYGON_ALCHEMY_API
 const MUMBAI_API = process.env.MUMBAI_ALCHEMY_API
 const PRIVATE_KEY = process.env.PRIVATE_KEY
-const ETH_MAINNET = process.env.ETH_MAINNET_ALCHEMY_API
+
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
     solidity: {
@@ -25,8 +25,7 @@ module.exports = {
             chainId: 31337,
             saveDeployments: true,
             forking: {
-                url: POLYGON_MAINNET_API,
-                blockNumber: 33468903,
+                url: POLYGON_MAINNET_API
             },
         },
         localhost: {
