@@ -12,7 +12,7 @@ contract TradeGuideStorage {
     // For this example, we will set the pool fee to 0.3%.
     uint24 public constant poolFee = 3000;
     uint256 public totalOfTrades = 0;
-    uint256 public users;
+    uint256 public users = 0;
 
     enum TradeState {
         ONGOING,

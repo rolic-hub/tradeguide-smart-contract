@@ -9,6 +9,7 @@ const networkConfig = {
     epns: "0xb3971BCef2D791bc4027BbfedFb47319A4AAaaAa",
     dai: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
     weth: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+    channel: "0xA6FA4fB5f76172d178d61B04b0ecd319C5d1C0aa"
   },
 
   80001: {
@@ -18,7 +19,10 @@ const networkConfig = {
     registry: "0xE16Df59B887e3Caa439E0b29B42bA2e7976FD8b2",
     registrar: "0x57A4a13b35d25EE78e084168aBaC5ad360252467",
     epns: "0xb3971BCef2D791bc4027BbfedFb47319A4AAaaAa",
-    aaveOracle: "0xf0E6744a59177014738e1eF920dc676fb3b8CB62"
+    aaveOracle: "0xf0E6744a59177014738e1eF920dc676fb3b8CB62",
+    weth: "0xA6FA4fB5f76172d178d61B04b0ecd319C5d1C0aa",
+    channel: "0xA6FA4fB5f76172d178d61B04b0ecd319C5d1C0aa"
+
   },
 };
 

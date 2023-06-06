@@ -41,7 +41,8 @@ contract TradeGuide is TradeGuideStorage {
         address _registrar,
         IPriceOracle _oracleAddress,
         AutomationRegistryInterface _registry,
-        IEPNSCommInterface epnsComms
+        IEPNSCommInterface epnsComms,
+        address _channel
     ) {
         swapRouter = _swapRouter;
         i_link = _link;
@@ -49,6 +50,7 @@ contract TradeGuide is TradeGuideStorage {
         oracleAdress = _oracleAddress;
         i_registry = _registry;
         _epnsComms = epnsComms;
+        channel = _channel;
     }
 
     function useTPandSL(
@@ -73,8 +75,9 @@ contract TradeGuide is TradeGuideStorage {
         _tradeLog.tp = tp;
 
         address[] memory _subscribers = subscribers[msg.sender];
-
-        sendNotif(_subscribers, _tradeLog, channel);
+        if (_subscribers.length > 0) {
+            sendNotif(_subscribers, _tradeLog, channel);
+        }
 
         uint256 amountOut = swapExactInputSingle(
             _tokenIn,
@@ -277,8 +280,9 @@ contract TradeGuide is TradeGuideStorage {
         _tradeLog.tp = tp;
 
         address[] memory _subscribers = subscribers[msg.sender];
-
-        sendNotif(_subscribers, _tradeLog, channel);
+        if (_subscribers.length > 0) {
+            sendNotif(_subscribers, _tradeLog, channel);
+        }
 
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter
             .ExactInputSingleParams({
@@ -372,6 +376,10 @@ contract TradeGuide is TradeGuideStorage {
         address user
     ) public view returns (address[] memory) {
         return subscribers[user];
+    }
+
+    function getPosts(address user) public view returns (string[] memory) {
+        return posts[user];
     }
 
     function getProfile(address user) public view returns (string memory) {

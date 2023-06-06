@@ -13,6 +13,7 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
     networkConfig[chain]["aaveOracle"],
     networkConfig[chain]["registry"],
     networkConfig[chain]["epns"],
+    networkConfig[chain]["channel"]
 
   ];
   log(
