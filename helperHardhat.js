@@ -21,7 +21,7 @@ const networkConfig = {
     epns: "0xb3971BCef2D791bc4027BbfedFb47319A4AAaaAa",
     aaveOracle: "0xf0E6744a59177014738e1eF920dc676fb3b8CB62",
     weth: "0xA6FA4fB5f76172d178d61B04b0ecd319C5d1C0aa",
-    channel: "0xA6FA4fB5f76172d178d61B04b0ecd319C5d1C0aa"
+    channel: "0x12114765eeA16473363682Cf832F5603BB8f6110"
 
   },
 };

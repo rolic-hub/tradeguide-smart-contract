@@ -23,6 +23,8 @@ interface KeeperRegistrarInterface {
         address sender
     ) external;
 }
+error InsufficientFunds();
+error InvalidTPOrSL();
 
 contract TradeGuide is TradeGuideStorage {
     using SafeERC20 for IERC20;
@@ -56,28 +58,48 @@ contract TradeGuide is TradeGuideStorage {
     function useTPandSL(
         int256 tp,
         int256 sl,
-        uint96 _amount,
         uint256 amountIn,
         address _tokenIn,
         address _tokenOut
     ) public {
-        int256 currentPrice = int256(oracleAdress.getAssetPrice(_tokenOut));
-        require(tp > currentPrice, "tp has to be greater than current price");
-        require(sl < currentPrice, "sl has to be less than current price");
+        int256 currentPriceTokenOut = int256(
+            oracleAdress.getAssetPrice(_tokenOut)
+        );
+        int256 currentPriceTokenIn = int256(
+            oracleAdress.getAssetPrice(_tokenIn)
+        );
+        int256 currentPriceLink = int256(
+            oracleAdress.getAssetPrice(address(i_link))
+        );
+        int minAmount = ((currentPriceLink / currentPriceTokenIn) * 5) / 10;
+        uint totalMin = amountIn + uint(minAmount);
+        if (tp < currentPriceTokenOut) {
+            revert InvalidTPOrSL();
+        }
+        if (sl > currentPriceTokenOut) {
+            revert InvalidTPOrSL();
+        }
+        if (IERC20(_tokenIn).balanceOf(msg.sender) < totalMin) {
+            revert InsufficientFunds();
+        }
 
-        TradeLog memory _tradeLog = trades.push();
+        TradeLog memory _tradeLog = getATrade[totalOfTrades + 1]; // = trades.push();
+        _tradeLog.index = uint8(totalOfTrades + 1);
         _tradeLog.trader = msg.sender;
         _tradeLog.tokenBought = _tokenOut;
         _tradeLog.timeStamp = block.timestamp;
-        _tradeLog.buyPrice = currentPrice;
+        _tradeLog.buyPrice = currentPriceTokenOut;
+        _tradeLog.amount = amountIn;
         _tradeLog._tradeState = TradeState.ONGOING;
         _tradeLog.sl = sl;
         _tradeLog.tp = tp;
 
         address[] memory _subscribers = subscribers[msg.sender];
         if (_subscribers.length > 0) {
-            sendNotif(_subscribers, _tradeLog, channel);
+            sendNotif(_subscribers, _tradeLog);
         }
+
+        IERC20(_tokenIn).safeTransferFrom(msg.sender, address(this), totalMin);
 
         uint256 amountOut = swapExactInputSingle(
             _tokenIn,
@@ -86,38 +108,37 @@ contract TradeGuide is TradeGuideStorage {
             address(this)
         );
 
-        registerAndPredictID(
-            _amount,
-            amountOut,
-            sl,
-            tp,
-            currentPrice,
-            _tokenOut,
-            _tradeLog
-        );
+        int amountOutMinLink = (currentPriceTokenIn / currentPriceLink) *
+            minAmount;
+
+        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter
+            .ExactInputSingleParams({
+                tokenIn: _tokenIn,
+                tokenOut: address(i_link),
+                fee: poolFee,
+                recipient: address(this),
+                deadline: block.timestamp,
+                amountIn: uint(minAmount),
+                amountOutMinimum: uint(amountOutMinLink),
+                sqrtPriceLimitX96: 0
+            });
+
+        // The call to `exactInputSingle` executes the swap.
+        uint amountOutLink = swapRouter.exactInputSingle(params);
+
+        registerAndPredictID(uint96(amountOutLink), amountOut, _tradeLog);
     }
 
     function registerAndPredictID(
         uint96 amount,
         uint256 _amountOut,
-        int256 _sl,
-        int256 _tp,
-        int256 _currentprice,
-        address _tokenOut,
         TradeLog memory _tradeLog
     ) public {
-        bytes memory checkData = abi.encode(
-            _amountOut,
-            _sl,
-            _tp,
-            _currentprice,
-            _tokenOut,
-            _tradeLog
-        );
+        bytes memory checkData = abi.encode(_amountOut, _tradeLog);
         (State memory state, , ) = i_registry.getState();
         uint256 oldNonce = state.nonce;
         bytes memory payload = abi.encode(
-            "tradeGuide Automate",
+            "TradeGuide Automate",
             "0x",
             address(this),
             9999,
@@ -155,20 +176,13 @@ contract TradeGuide is TradeGuideStorage {
     function checkUpkeep(
         bytes calldata checkData
     ) external view returns (bool upkeepNeeded, bytes memory performData) {
-        (
-            uint256 _tp,
-            uint256 _sl,
-            ,
-            int256 _currentPrice,
-            ,
-            TradeLog memory _tradeLog
-        ) = abi.decode(
-                checkData,
-                (uint256, uint256, uint256, int256, address, TradeLog)
-            );
+        (, TradeLog memory _tradeLog) = abi.decode(
+            checkData,
+            (uint256, TradeLog)
+        );
 
-        bool checkSLTP = (int256(_tp) <= _currentPrice ||
-            int256(_sl) >= _currentPrice);
+        bool checkSLTP = (int256(_tradeLog.tp) <= _tradeLog.buyPrice ||
+            int256(_tradeLog.sl) >= _tradeLog.buyPrice);
         upkeepNeeded = (checkSLTP &&
             _tradeLog._tradeState == TradeState.ONGOING);
 
@@ -176,22 +190,20 @@ contract TradeGuide is TradeGuideStorage {
     }
 
     function performUpkeep(bytes calldata performData) external {
-        (
-            uint256 _tp,
-            uint256 _sl,
-            uint256 amountIn,
-            int256 _currentPrice,
-            address _tokenIn,
-            TradeLog memory _tradeLog
-        ) = abi.decode(
-                performData,
-                (uint256, uint256, uint256, int256, address, TradeLog)
-            );
+        (uint256 amountIn, TradeLog memory _tradeLog) = abi.decode(
+            performData,
+            (uint256, TradeLog)
+        );
 
-        bool checkSLTP = (int256(_tp) <= _currentPrice ||
-            int256(_sl) >= _currentPrice);
+        bool checkSLTP = (int256(_tradeLog.tp) <= _tradeLog.buyPrice ||
+            int256(_tradeLog.sl) >= _tradeLog.buyPrice);
         if (checkSLTP && _tradeLog._tradeState == TradeState.ONGOING) {
-            swapExactInputSingle(_tokenIn, amountIn, USDC, msg.sender);
+            swapExactInputSingle(
+                _tradeLog.tokenBought,
+                amountIn,
+                USDC,
+                msg.sender
+            );
             _tradeLog._tradeState = TradeState.COMPLETED;
         } else {
             cancelUpkeepById(_tradeLog);
@@ -199,11 +211,11 @@ contract TradeGuide is TradeGuideStorage {
     }
 
     function subscribe(address _to) public {
-        require(
-            IERC20(USDC).balanceOf(msg.sender) >= subscribersFee[_to],
-            "Insufficient balance to subscribe"
-        );
+        if (IERC20(USDC).balanceOf(msg.sender) < subscribersFee[_to]) {
+            revert InsufficientFunds();
+        }
         IERC20(USDC).transfer(_to, subscribersFee[_to]);
+
         subscribers[_to].push(msg.sender);
         emit Subscribed(_to, subscribersFee[_to]);
     }
@@ -223,9 +235,9 @@ contract TradeGuide is TradeGuideStorage {
         IERC20(_tokenIn).safeApprove(address(swapRouter), amountIn);
 
         uint256 currentPriceOut = oracleAdress.getAssetPrice(_tokenOut);
-        uint256 currentPriceIn = oracleAdress.getAssetPrice(_tokenOut);
+        uint256 currentPriceIn = oracleAdress.getAssetPrice(_tokenIn);
 
-        uint _amountOutMin = currentPriceIn / currentPriceOut;
+        uint _amountOutMin = (currentPriceIn / currentPriceOut) * amountIn;
 
         // Naively set amountOutMinimum to 0. In production, use an oracle or other data source to choose a safer value for amountOutMinimum.
         // We also set the sqrtPriceLimitx96 to be 0 to ensure we swap our exact input amount.
@@ -243,11 +255,8 @@ contract TradeGuide is TradeGuideStorage {
 
         // The call to `exactInputSingle` executes the swap.
         amountOut = swapRouter.exactInputSingle(params);
-        balances[msg.sender][_tokenOut] = amountOut;
         noOfTrades[msg.sender] += 1;
         totalOfTrades++;
-
-        IERC20(_tokenOut).safeApprove(address(swapRouter), amountOut);
     }
 
     function swapExactInputSingleAlone(
@@ -263,17 +272,19 @@ contract TradeGuide is TradeGuideStorage {
         // We also set the sqrtPriceLimitx96 to be 0 to ensure we swap our exact input amount.
 
         uint256 currentPriceOut = oracleAdress.getAssetPrice(_tokenOut);
-        uint256 currentPriceIn = oracleAdress.getAssetPrice(_tokenOut);
+        uint256 currentPriceIn = oracleAdress.getAssetPrice(_tokenIn);
 
-        uint _amountOutMin = currentPriceIn / currentPriceOut;
+        uint _amountOutMin = (currentPriceIn / currentPriceOut) * amountIn;
 
         int256 sl = 0;
         int256 tp = 0;
 
-        TradeLog storage _tradeLog = trades.push();
+        TradeLog storage _tradeLog = getATrade[totalOfTrades + 1];
+        _tradeLog.index = uint8(totalOfTrades + 1);
         _tradeLog.trader = msg.sender;
         _tradeLog.tokenBought = _tokenOut;
         _tradeLog.timeStamp = block.timestamp;
+        _tradeLog.amount = amountIn;
         _tradeLog.buyPrice = int256(currentPriceOut);
         _tradeLog._tradeState = TradeState.ONGOING;
         _tradeLog.sl = sl;
@@ -281,7 +292,7 @@ contract TradeGuide is TradeGuideStorage {
 
         address[] memory _subscribers = subscribers[msg.sender];
         if (_subscribers.length > 0) {
-            sendNotif(_subscribers, _tradeLog, channel);
+            sendNotif(_subscribers, _tradeLog);
         }
 
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter
@@ -311,18 +322,25 @@ contract TradeGuide is TradeGuideStorage {
     }
 
     function addFundsByID(TradeLog memory _tradeLog, uint96 amount) external {
+        if (IERC20(address(i_link)).balanceOf(msg.sender) < amount) {
+            revert InsufficientFunds();
+        }
+        IERC20(address(i_link)).safeTransferFrom(
+            msg.sender,
+            address(this),
+            amount
+        );
         uint256 id = _tradeLog.upkeepID;
         i_registry.addFunds(id, amount);
     }
 
     function sendNotif(
         address[] memory _to,
-        TradeLog memory _tradeLog,
-        address _channel
+        TradeLog memory _tradeLog
     ) public returns (bool) {
         for (uint i = 0; i < _to.length; i++) {
             _epnsComms.sendNotification(
-                _channel,
+                channel,
                 _to[i],
                 bytes(
                     string(
@@ -369,7 +387,12 @@ contract TradeGuide is TradeGuideStorage {
     //view Functions
 
     function getTrades() public view returns (TradeLog[] memory) {
-        return trades;
+        uint aTrade = totalOfTrades;
+        TradeLog[] memory _tradeLog = new TradeLog[](aTrade);
+        for (uint i = 0; i < aTrade; i++) {
+            _tradeLog[i] = getATrade[i + 1];
+        }
+        return _tradeLog;
     }
 
     function getSubcribers(
@@ -386,6 +409,12 @@ contract TradeGuide is TradeGuideStorage {
         return userProfile[user];
     }
 
+    function getUpkeepInfo(
+        TradeLog memory _tradeLog
+    ) public view returns (uint96 balance) {
+        (, , , balance, , , , ) = i_registry.getUpkeep(_tradeLog.upkeepID);
+    }
+
     function getSubscribersFee(address user) public view returns (uint256) {
         return subscribersFee[user];
     }
@@ -400,6 +429,11 @@ contract TradeGuide is TradeGuideStorage {
 
     function getTotalTrades() public view returns (uint256) {
         return totalOfTrades;
+    }
+
+    function getPrice(address _token) public view returns (uint256) {
+        uint _getPrice = oracleAdress.getAssetPrice(_token);
+        return _getPrice;
     }
 
     receive() external payable {}
