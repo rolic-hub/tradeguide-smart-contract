@@ -1,13 +1,9 @@
-# Sample Hardhat Project
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a script that deploys that contract.
+## TradeGuide 
 
-Try running some of the following tasks:
+A uniswap V2 integration coupled with functionality for adding stop loss and take profit to swaps to manage trading risk on volatile tokens.
 
-```shell
-npx hardhat help
-npx hardhat test
-REPORT_GAS=true npx hardhat test
-npx hardhat node
-npx hardhat run scripts/deploy.js
-```
+## Tech stack
+Uniswap -- For making swaps between cryptocurrencies
+Chainlink Automation -- For setting up TP and SL to manage trade risk 
+Push Notifications -- To notify users of changes in their positions 
